@@ -1,3 +1,14 @@
+---
+title: DocTalk
+emoji: 📄
+colorFrom: gray
+colorTo: red
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Ask your documents. Get answers with receipts.
+---
+
 <img src="frontend/src/assets/doctalk-logo.png" alt="DocTalk" width="84">
 
 # DocTalk
@@ -126,49 +137,66 @@ docker compose -f docker-compose.full.yml up --build
 | `GEMINI_API_KEY` | | Only when `LLM_PROVIDER=gemini` |
 | `CHAT_MODEL`, `UTIL_MODEL`, `LLM_MIN_GAP_MS` | | Model and pacing overrides |
 
-## Deploying (Render, free tier)
+## Deploying for free
 
-`render.yaml` is a Blueprint that runs the whole thing as **one** free web
-service. Render Dashboard → New → Blueprint → pick this repo, then fill in the
-five secrets it prompts for: `DATABASE_URL`, `AUTH_DATABASE_URL`,
-`GROQ_API_KEY`, `GEMINI_API_KEY` and `ENCRYPTION_KEY`
-(`openssl rand -hex 32`).
+The whole stack runs as **one container**: the API (worker in-process) serving
+the built frontend, MarkItDown, and the auth service. Only the public port is
+exposed — the API proxies `/auth`, `/mfa` and `/oauth` to the auth service over
+loopback, so the browser sees one origin and its cookies stay first-party.
 
-Point both database URLs at the same Postgres — DocTalk uses the `public`
-schema, the auth service gets its own via `?schema=auth`:
+Two hosts are supported. **Hugging Face Spaces is the one to use.**
+
+| | HF Spaces (free) | Render (free) |
+|---|---|---|
+| RAM / CPU | **16 GB · 2 vCPU** | 512 MB · 0.1 CPU |
+| Sleeps after | **48 hours** | 15 minutes |
+| Embeddings | **local model, no key** | needs an API key |
+| Re-ingest needed | **no** | yes — different vector space |
+| Redis | in-container | free Key Value |
+| Image | [`Dockerfile`](Dockerfile) | [`Dockerfile.render`](Dockerfile.render) |
+
+Both need a Postgres with pgvector (a free [Neon](https://neon.tech) project —
+Render's own free database is deleted after 30 days) and a `GROQ_API_KEY`.
+Point both database URLs at the same database; DocTalk uses `public` and the
+auth service gets its own schema:
 
 ```
 DATABASE_URL       postgresql://…/neondb?sslmode=require
 AUTH_DATABASE_URL  postgresql://…/neondb?sslmode=require&schema=auth
 ```
 
-One container ([`Dockerfile`](Dockerfile), [`start.sh`](start.sh)) runs three
-runtimes: the API (with the worker in-process) serving the built frontend on
-`$PORT`, MarkItDown on loopback `:8000`, and the auth service on loopback
-`:4000`. Only `$PORT` is exposed; the API proxies `/auth`, `/mfa` and `/oauth`
-to the auth service so the browser sees one origin and its cookies stay
-first-party.
+### Hugging Face Spaces
 
-**Read this before relying on it.** The free tier is a demo, not a deployment:
+Create a Space with **Docker** as the SDK and push this repo to it. The YAML
+header at the top of this README configures it (`sdk: docker`, `app_port: 7860`).
+Add four Space secrets: `DATABASE_URL`, `AUTH_DATABASE_URL`, `GROQ_API_KEY` and
+`ENCRYPTION_KEY` (`openssl rand -hex 32`). That's all — embeddings run locally
+in the container, so there's no embedding key and vectors stay identical to a
+local run.
 
-- **512 MB RAM and 0.1 CPU** for all three runtimes together. Measured under
-  `docker run --memory=512m`: ~200 MB idle, ~188 MB after a signup, login and
-  API queries — so it fits with room to spare. Both Node heaps are capped in
-  `start.sh` as insurance, since an uncapped heap grows toward the container
-  limit under pressure. The 0.1 CPU is the likelier bottleneck: cold starts and
-  PDF conversion will be slow.
-- **Embeddings must run via API here.** `EMBED_PROVIDER=gemini` is forced,
-  because PyTorch plus the all-mpnet-base-v2 weights need roughly a gigabyte.
-  The two providers are different vector spaces, so **switching invalidates
-  every stored embedding** — re-ingest, or retrieval quietly returns nonsense.
-- **Spins down after 15 minutes idle**, ~1 minute cold start. Queued uploads
-  don't progress while it's asleep. 750 free instance hours per workspace/month.
-- **No persistent disk**, so the auth service regenerates its RSA keys on every
-  boot: each deploy signs everyone out.
-- **Free Key Value has no persistence** — in-flight jobs are lost on restart.
-- Render's own free Postgres is **deleted 30 days after creation**, which is why
-  the blueprint asks for an external URL (a free Neon project doesn't expire)
-  rather than provisioning one.
+Use the direct `https://<user>-<space>.hf.space` URL. The huggingface.co page
+frames the Space in an iframe, which makes the auth cookies third-party and
+blocks sign-in.
+
+### Render
+
+`render.yaml` is a Blueprint: Dashboard → New → Blueprint → pick this repo, then
+fill in the five secrets it prompts for — the four above plus `GEMINI_API_KEY`.
+
+The extra key is the price of 512 MB: PyTorch and the all-mpnet-base-v2 weights
+need roughly a gigabyte, so `EMBED_PROVIDER=gemini` is forced and
+`requirements-slim.txt` drops `sentence-transformers`. **Gemini's vectors are a
+different space from the local model's**, so pointing Render at a database
+ingested locally means retrieval quietly returns nonsense until you re-ingest.
+Measured under `docker run --memory=512m`: ~200 MB idle, ~188 MB after a real
+signup, login and API queries — it fits, and 0.1 CPU is the real bottleneck.
+
+### True of both
+
+- **No persistent disk**, so the auth service regenerates its RSA keys on each
+  boot: every deploy signs everyone out.
+- **The queue is transient** — in-flight jobs are lost on restart.
+- Free tiers sleep. Nothing progresses while the container is asleep.
 
 ## API
 
