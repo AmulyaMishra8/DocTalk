@@ -1,0 +1,28 @@
+# Build context for the root Dockerfile is the whole repo, so keep it small.
+# Without this, every node_modules tree and the vendored MarkItDown copy get
+# uploaded to the daemon on each build.
+
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+**/build
+.turbo
+.git
+.claude
+
+# Secrets must never enter an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+**/keys
+**/*.pem
+
+# A full copy of Microsoft's MarkItDown repo; markitdown-service installs the
+# package from pip instead.
+markitdown-main
+
+# Runtime + local noise
+backend/uploads
+**/*.log
+.DS_Store

@@ -1,0 +1,13 @@
+# Slim deps for the single-container deploy (see Dockerfile at the repo root).
+#
+# Identical to requirements.txt minus sentence-transformers, which drags in
+# PyTorch (~800 MB installed) and needs ~1 GB of RAM once the all-mpnet-base-v2
+# weights are loaded. A Render free instance has 512 MB total for every process
+# in the container, so local embeddings cannot come along.
+#
+# With this file, /convert works and /embed returns 503 — the backend must run
+# with EMBED_PROVIDER=gemini.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+markitdown[pdf]>=0.0.1a3

@@ -126,6 +126,50 @@ docker compose -f docker-compose.full.yml up --build
 | `GEMINI_API_KEY` | | Only when `LLM_PROVIDER=gemini` |
 | `CHAT_MODEL`, `UTIL_MODEL`, `LLM_MIN_GAP_MS` | | Model and pacing overrides |
 
+## Deploying (Render, free tier)
+
+`render.yaml` is a Blueprint that runs the whole thing as **one** free web
+service. Render Dashboard → New → Blueprint → pick this repo, then fill in the
+five secrets it prompts for: `DATABASE_URL`, `AUTH_DATABASE_URL`,
+`GROQ_API_KEY`, `GEMINI_API_KEY` and `ENCRYPTION_KEY`
+(`openssl rand -hex 32`).
+
+Point both database URLs at the same Postgres — DocTalk uses the `public`
+schema, the auth service gets its own via `?schema=auth`:
+
+```
+DATABASE_URL       postgresql://…/neondb?sslmode=require
+AUTH_DATABASE_URL  postgresql://…/neondb?sslmode=require&schema=auth
+```
+
+One container ([`Dockerfile`](Dockerfile), [`start.sh`](start.sh)) runs three
+runtimes: the API (with the worker in-process) serving the built frontend on
+`$PORT`, MarkItDown on loopback `:8000`, and the auth service on loopback
+`:4000`. Only `$PORT` is exposed; the API proxies `/auth`, `/mfa` and `/oauth`
+to the auth service so the browser sees one origin and its cookies stay
+first-party.
+
+**Read this before relying on it.** The free tier is a demo, not a deployment:
+
+- **512 MB RAM and 0.1 CPU** for all three runtimes together. Measured under
+  `docker run --memory=512m`: ~200 MB idle, ~188 MB after a signup, login and
+  API queries — so it fits with room to spare. Both Node heaps are capped in
+  `start.sh` as insurance, since an uncapped heap grows toward the container
+  limit under pressure. The 0.1 CPU is the likelier bottleneck: cold starts and
+  PDF conversion will be slow.
+- **Embeddings must run via API here.** `EMBED_PROVIDER=gemini` is forced,
+  because PyTorch plus the all-mpnet-base-v2 weights need roughly a gigabyte.
+  The two providers are different vector spaces, so **switching invalidates
+  every stored embedding** — re-ingest, or retrieval quietly returns nonsense.
+- **Spins down after 15 minutes idle**, ~1 minute cold start. Queued uploads
+  don't progress while it's asleep. 750 free instance hours per workspace/month.
+- **No persistent disk**, so the auth service regenerates its RSA keys on every
+  boot: each deploy signs everyone out.
+- **Free Key Value has no persistence** — in-flight jobs are lost on restart.
+- Render's own free Postgres is **deleted 30 days after creation**, which is why
+  the blueprint asks for an external URL (a free Neon project doesn't expire)
+  rather than provisioning one.
+
 ## API
 
 All routes except `/hello` and `/health` require a bearer token or the

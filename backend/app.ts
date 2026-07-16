@@ -1,8 +1,10 @@
 import fs from 'fs';
+import path from 'path';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import axios from 'axios';
 import { markdownQueue, defaultJobOptions } from './queue/markdownQueue';
 import { streamQuestion } from './services/ask';
@@ -24,6 +26,36 @@ const upload = multer({
 });
 
 const app = express();
+
+// ── Auth proxy (single-container mode; see Dockerfile + render.yaml) ─────────
+// FIRST, before express.json(). In dev the Vite proxy forwards these (see
+// frontend/vite.config.ts); when everything shares one container the API has to,
+// so the browser stays on one origin and the auth cookies remain first-party.
+//
+// Two things this ordering gets right, both of which broke in testing:
+//  1. Mounted at the root with pathFilter — NOT app.use('/auth', proxy), which
+//     makes Express strip the mount path so the auth service receives /me
+//     instead of /auth/me and 404s.
+//  2. Above express.json() — a body parser consumes the stream, and the proxy
+//     would then forward POSTs (login, register) with an empty body and hang.
+if (process.env.AUTH_PROXY_TARGET) {
+  const target = process.env.AUTH_PROXY_TARGET;
+  // A predicate, not a glob: glob pathFilters silently matched nothing here and
+  // every /auth request fell through to requireAuth as a 401. A regex is
+  // unambiguous and easy to verify.
+  const isAuthPath = (pathname: string) => /^\/(auth|mfa|oauth)(\/|$)/.test(pathname);
+
+  app.use(
+    createProxyMiddleware({
+      target,
+      pathFilter: (pathname: string) => isAuthPath(pathname),
+      changeOrigin: false, // same-origin: preserve Host so cookies stay first-party
+      xfwd: true,
+    }),
+  );
+  logger.info({ target }, 'proxying /auth, /mfa, /oauth');
+}
+
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
@@ -92,6 +124,29 @@ app.get('/health', async (_req: Request, res: Response) => {
 
   res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', checks });
 });
+
+// ── Single-container mode (see Dockerfile + render.yaml at the repo root) ────
+// Registered BEFORE requireAuth on purpose: the sign-in screen and the JS
+// bundle have to be reachable while logged out. requireAuth stays fail-closed —
+// anything added after it is protected by default — so public surface must be
+// declared up here explicitly. (The auth proxy is higher still, above the body
+// parser.)
+
+// Serve the built frontend from this process.
+if (process.env.SERVE_FRONTEND === '1') {
+  const dist = path.resolve(__dirname, '../frontend/dist');
+  // index: false — the SPA routes below own index.html, so a request for "/"
+  // can't bypass them.
+  app.use(express.static(dist, { index: false, maxAge: '1h' }));
+
+  // The SPA's client-side routes, listed rather than wildcarded. A catch-all
+  // here would either shadow the API routes below or have to sit after
+  // requireAuth, where it would 401. These four are every path Root() handles
+  // (see frontend/src/main.tsx).
+  app.get(['/', '/login', '/verify-email', '/reset-password'], (_req: Request, res: Response) => {
+    res.sendFile(path.join(dist, 'index.html'));
+  });
+}
 
 app.use(requireAuth);
 

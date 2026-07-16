@@ -13,7 +13,6 @@ from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from pydantic import BaseModel
 from markitdown import MarkItDown
-from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("markitdown-service")
@@ -27,9 +26,24 @@ app = FastAPI(
 # MarkItDown is stateless and cheap to reuse across requests.
 _converter = MarkItDown()
 
-# Embedding model — loaded once at startup. 768-dim vectors match the pgvector
-# schema (chunks.embedding vector(768)). No API key required.
-_embed_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+# Embedding model — optional. sentence-transformers pulls in PyTorch, which
+# together with the all-mpnet-base-v2 weights needs roughly a gigabyte of RAM.
+# That's fine locally and impossible on a 512 MB host, so the slim deploy image
+# (requirements-slim.txt) leaves it out and the backend embeds via an API
+# instead (EMBED_PROVIDER=gemini). Import lazily so this module still boots
+# without the package installed; /embed then reports 503 rather than crashing
+# the whole service, which also serves /convert.
+_embed_model = None
+_embed_error: str | None = None
+
+try:
+    from sentence_transformers import SentenceTransformer
+
+    _embed_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+    logger.info("local embedding model loaded (all-mpnet-base-v2, 768-dim)")
+except Exception as exc:  # ImportError, or weights missing/corrupt
+    _embed_error = str(exc)
+    logger.warning("local embeddings unavailable: %s", exc)
 
 # Accept PDFs primarily; MarkItDown handles more but the pipeline feeds PDFs.
 ALLOWED_SUFFIXES = {".pdf"}
@@ -101,12 +115,21 @@ class EmbedResponse(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "embeddings": "local" if _embed_model else "unavailable"}
 
 
 @app.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest) -> EmbedResponse:
     """Embed a single piece of text. Returns a 768-dim normalised vector."""
+    if _embed_model is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Local embeddings are not installed in this image. "
+                f"Set EMBED_PROVIDER=gemini on the backend, or install "
+                f"sentence-transformers. ({_embed_error})"
+            ),
+        )
     vector = _embed_model.encode(req.text, normalize_embeddings=True)
     return EmbedResponse(embedding=vector.tolist())
 

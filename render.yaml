@@ -1,0 +1,111 @@
+# Render Blueprint — DocTalk as ONE free web service.
+#
+# Deploy: push this file, then Render Dashboard → New → Blueprint → pick this
+# repo. Fill in the three secrets it asks for (marked sync: false below).
+#
+# WHAT THIS IS
+#   One Docker web service running the API, the BullMQ worker (in-process), the
+#   built frontend, MarkItDown and the auth service — see Dockerfile + start.sh.
+#   Plus one free Key Value (Redis) instance for the queue.
+#
+# WHAT IT IS NOT
+#   A production deployment. Free-tier facts worth knowing before you rely on it:
+#
+#   - 512 MB RAM / 0.1 CPU for all three runtimes. This is the tight bit.
+#   - Spins down after 15 minutes idle; the next request waits ~1 min for a cold
+#     start. Queued uploads don't progress while it's asleep.
+#   - Key Value has no disk persistence — in-flight jobs are lost on restart.
+#   - No persistent disk, so the auth service regenerates its RSA keys on every
+#     boot: each deploy signs everyone out.
+#   - 750 free instance hours per workspace per month, shared.
+#
+# DATABASE
+#   Points at your existing Neon project rather than a Render database, because
+#   Render's free Postgres is deleted 30 days after creation. Both schemas live
+#   in that one database: DocTalk in `public`, auth in `auth`.
+
+services:
+  - name: doctalk
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+
+    envVars:
+      # ── Secrets — set these in the Render dashboard when prompted ──────────
+      # Neon connection string, e.g.
+      #   postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+
+      # Same Neon database, separate schema for the auth service's tables.
+      # Take DATABASE_URL and append &schema=auth (or ?schema=auth if it has no
+      # query string yet).
+      - key: AUTH_DATABASE_URL
+        sync: false
+
+      # https://console.groq.com/keys — answers + reranking.
+      - key: GROQ_API_KEY
+        sync: false
+
+      # Embeddings. Required here: the local model can't fit in 512 MB.
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # Signs auth's TOTP secrets at rest. Generate: openssl rand -hex 32
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      # ── Wired automatically ───────────────────────────────────────────────
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: doctalk-kv
+          property: connectionString
+
+      # ── Single-container wiring (see start.sh) ────────────────────────────
+      - key: EMBED_PROVIDER
+        value: gemini # 512 MB can't hold PyTorch — see requirements-slim.txt
+      - key: RUN_WORKER
+        value: "1" # no background workers on free; run it in the API process
+      - key: SERVE_FRONTEND
+        value: "1" # the API serves frontend/dist
+      - key: AUTH_PROXY_TARGET
+        value: http://127.0.0.1:4000 # /auth, /mfa, /oauth → auth service
+      - key: MARKITDOWN_URL
+        value: http://127.0.0.1:8000
+
+      # ── Auth service config ───────────────────────────────────────────────
+      - key: AUTH_JWKS_URL
+        value: http://127.0.0.1:4000/.well-known/jwks.json
+      - key: AUTH_ISSUER
+        value: auth-service
+      - key: AUTH_AUDIENCE
+        value: auth-clients
+      - key: JWT_ISSUER
+        value: auth-service
+      - key: JWT_AUDIENCE
+        value: auth-clients
+      - key: COOKIE_SECURE
+        value: "true" # Render terminates TLS; cookies must be Secure
+      # WEB_ORIGIN and APP_URL are NOT set here on purpose. A blueprint's
+      # `fromService: property: host` yields a bare hostname with no scheme
+      # ("doctalk.onrender.com"), which is not a valid origin and would break
+      # auth's origin and cookie checks. start.sh derives both from
+      # RENDER_EXTERNAL_URL, which Render sets to the full https:// URL.
+
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+  # Queue backing store. Free: 25 MB, no persistence.
+  - name: doctalk-kv
+    type: keyvalue
+    plan: free
+    region: oregon
+    ipAllowList: [] # private: reachable only from services in this workspace
