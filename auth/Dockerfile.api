@@ -1,0 +1,36 @@
+# Auth API image. Built from the WORKSPACE ROOT (context: ../Auth) so the
+# @auth/shared workspace package resolves during install/build.
+#
+# Debian slim (not alpine) because argon2 (native) and Prisma engines are far
+# happier on glibc. openssl is required by Prisma at runtime.
+FROM node:20-slim
+
+WORKDIR /app
+
+# Toolchain for argon2's native build (used only if no prebuilt binary matches)
+# + openssl for Prisma.
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ openssl
+
+# Install all workspace deps. Copy manifests first for better layer caching.
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/api/package.json packages/api/package.json
+COPY packages/web/package.json packages/web/package.json
+RUN npm install
+
+# Build the shared types, generate the Prisma client, then build the API.
+COPY packages/shared packages/shared
+RUN npm run build --workspace @auth/shared
+COPY packages/api packages/api
+RUN npm run db:generate --workspace @auth/api
+RUN npm run build --workspace @auth/api
+
+EXPOSE 4000
+
+# On start: make sure RSA signing keys exist (generated into a mounted volume so
+# they're stable across restarts), apply any pending DB migrations (non-fatal —
+# the cloud DB is usually already migrated), then run the compiled server.
+# Note: tsconfig has rootDir "." + include ["src","scripts"], so tsc emits the
+# entry at dist/src/index.js (NOT dist/index.js, which the package's stale
+# "start" script points at).
+CMD ["sh", "-c", "cd packages/api && (test -f keys/private.pem || npm run keys) && (npx prisma migrate deploy || echo 'migrate skipped') && node dist/src/index.js"]

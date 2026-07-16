@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A registered person. Credentials live here too (one set per user for v1).
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  passwordHash  String?  // null when the account is OAuth-only
+  displayName   String?
+  status        UserStatus @default(ACTIVE)
+
+  // MFA
+  mfaEnabled       Boolean @default(false)
+  mfaSecret        String? // encrypted TOTP secret
+  mfaRecoveryCodes String? // JSON array of hashed one-time recovery codes
+
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+
+  oauthAccounts      OAuthAccount[]
+  verificationTokens VerificationToken[]
+  auditLogs          AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserStatus {
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
+// A social login linked to a user (Google, GitHub, ...).
+model OAuthAccount {
+  id                String @id @default(cuid())
+  provider          String // "google" | "github"
+  providerAccountId String // the user's id at that provider
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+}
+
+// Short-lived one-time tokens for email verification and password reset.
+model VerificationToken {
+  id        String                @id @default(cuid())
+  type      VerificationTokenType
+  tokenHash String                @unique // we store only the hash
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime              @default(now())
+
+  @@index([userId])
+}
+
+enum VerificationTokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// An immutable trail of security-relevant events.
+model AuditLog {
+  id        String   @id @default(cuid())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  event     String
+  ip        String?
+  userAgent String?
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([event])
+}

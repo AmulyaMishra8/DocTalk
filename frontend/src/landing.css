@@ -1,0 +1,447 @@
+/* Marketing landing page, scoped under .dt-landing. Consumes the monochrome
+   token set in index.css :root, so the page and the product are one thing.
+
+   Motion is three layered ideas:
+     1. .dt-stagger  — hero elements rise in on load, offset by --i
+     2. .dt-reveal   — sections fade up when scrolled into view (JS adds .is-in)
+     3. hover states — lift on cards and buttons
+   All three collapse to nothing under prefers-reduced-motion (bottom of file).
+   The drifting gradient aurora that used to sit behind the hero is gone: it was
+   built from gold and orange blobs, and there is no such thing as a monochrome
+   aurora — a grey one just reads as a smudge. The hero sits on flat black. */
+
+.dt-landing {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* ---------- Shared chrome ---------- */
+
+.dt-landing main,
+.dt-nav,
+.dt-foot {
+  position: relative;
+  z-index: 1;
+}
+
+.dt-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 20px clamp(20px, 5vw, 56px);
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.dt-nav-links {
+  margin-left: auto;
+  display: flex;
+  gap: 26px;
+}
+.dt-nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  position: relative;
+  transition: color 0.16s ease;
+}
+.dt-nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -5px;
+  height: 1.5px;
+  width: 100%;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.24s ease;
+}
+.dt-nav-links a:hover { color: var(--brand); }
+.dt-nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
+
+.dt-nav-brand { display: flex; align-items: center; gap: 10px; }
+/* ---------- Buttons ---------- */
+
+.dt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease,
+    transform 0.16s ease, box-shadow 0.16s ease;
+}
+.dt-btn svg { width: 16px; height: 16px; transition: transform 0.2s ease; }
+.dt-btn:hover svg { transform: translateX(3px); }
+
+.dt-btn-primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+.dt-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px -12px var(--accent-glow);
+}
+.dt-btn-primary:active { transform: translateY(0); }
+
+.dt-btn-ghost {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: var(--border-strong);
+}
+.dt-btn-ghost:hover {
+  color: var(--brand);
+  background: var(--surface-hover);
+  border-color: var(--brand);
+}
+
+/* ---------- Hero ---------- */
+
+.dt-hero {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: clamp(48px, 9vh, 96px) clamp(20px, 5vw, 56px) clamp(60px, 10vh, 110px);
+  text-align: center;
+}
+
+.dt-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 22px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-dim);
+}
+.dt-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cite);
+  box-shadow: 0 0 0 0 var(--cite-soft);
+  animation: dt-pulse 2.4s ease-out infinite;
+}
+@keyframes dt-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.35); }
+  70%  { box-shadow: 0 0 0 7px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+.dt-hero-title {
+  margin: 0 0 20px;
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(2.3rem, 5.6vw, 4rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+/* Solid, not a gradient. --cite stays reserved for citation markers only, so
+   the emphasis line takes the accent. */
+.dt-hero-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.dt-hero-sub {
+  margin: 0 auto 30px;
+  max-width: 600px;
+  font-size: clamp(1rem, 1.6vw, 1.12rem);
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+
+.dt-hero-cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.dt-hero-note {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  color: var(--text-mute);
+}
+
+/* ---------- Hero proof card ---------- */
+
+.dt-proof {
+  margin-top: clamp(44px, 7vh, 72px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  text-align: left;
+}
+.dt-proof-bar {
+  display: flex;
+  gap: 7px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dt-proof-bar span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.dt-proof-body { padding: 22px clamp(18px, 3vw, 28px) 24px; }
+.dt-proof-q {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-mute);
+}
+.dt-proof-q::before { content: "> "; color: var(--accent); }
+.dt-proof-a {
+  margin: 0 0 18px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.dt-cite {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--cite-soft);
+  color: var(--cite);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.dt-proof-cites { display: flex; gap: 8px; flex-wrap: wrap; }
+.dt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.dt-chip b { color: var(--cite); }
+
+/* ---------- Sections ---------- */
+
+.dt-section {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: clamp(56px, 9vh, 100px) clamp(20px, 5vw, 56px);
+}
+.dt-section-head {
+  max-width: 620px;
+  margin: 0 auto clamp(34px, 5vh, 52px);
+  text-align: center;
+}
+.dt-section-head h2,
+.dt-final h2 {
+  margin: 0 0 12px;
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500;
+  font-size: clamp(1.7rem, 3.4vw, 2.4rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.dt-section-head p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+
+/* ---------- Feature grid ---------- */
+
+/* 300px floor lands on 3 columns at max width, so the six cards read as 3+3 and
+   the --d stagger (set per row of three) matches what's actually on screen. */
+.dt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+.dt-card {
+  position: relative;
+  padding: 24px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease,
+    box-shadow 0.22s ease;
+}
+.dt-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--brand);
+  background: var(--surface-2);
+  box-shadow: 0 24px 50px -30px rgba(0, 0, 0, 0.9);
+}
+.dt-card-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--accent-soft);
+  color: var(--accent);
+  transition: background 0.22s ease, color 0.22s ease, border-color 0.22s ease;
+}
+.dt-card-icon svg { width: 19px; height: 19px; }
+.dt-card:hover .dt-card-icon {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--accent-ink);
+}
+.dt-card h3 {
+  margin: 0 0 8px;
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.dt-card p {
+  margin: 0;
+  font-size: 13.8px;
+  line-height: 1.62;
+  color: var(--text-dim);
+}
+
+/* ---------- Steps ---------- */
+
+.dt-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.dt-step {
+  position: relative;
+  padding: 20px 20px 20px 22px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: transform 0.22s ease, background 0.22s ease, border-left-color 0.22s ease;
+}
+.dt-step:hover {
+  transform: translateY(-3px);
+  background: var(--surface-2);
+  border-left-color: var(--cite);
+}
+.dt-step-n {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+.dt-step h3 {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  font-weight: 650;
+}
+.dt-step p {
+  margin: 0;
+  font-size: 13.4px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+/* ---------- Final CTA ---------- */
+
+.dt-final {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(52px, 8vh, 88px) clamp(20px, 5vw, 56px) clamp(64px, 10vh, 104px);
+  text-align: center;
+}
+.dt-final p {
+  margin: 0 0 26px;
+  font-size: 15px;
+  color: var(--text-dim);
+}
+
+/* ---------- Footer ---------- */
+
+.dt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 26px clamp(20px, 5vw, 56px) 40px;
+  border-top: 1px solid var(--border);
+}
+.dt-foot-note {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+}
+
+/* ---------- Motion: hero stagger + scroll reveal ---------- */
+
+.dt-stagger {
+  opacity: 0;
+  animation: dt-rise 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+@keyframes dt-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dt-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0ms);
+}
+.dt-reveal.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 700px) {
+  .dt-nav-links { display: none; }
+  .dt-nav { gap: 12px; }
+  .dt-nav-brand { margin-right: auto; }
+}
+
+/* ---------- Reduced motion ----------
+   Kill drift, stagger, and reveal transforms. The reveal hook also skips the
+   observer and marks everything visible, so nothing depends on scroll here. */
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-dot { animation: none; }
+  .dt-stagger { opacity: 1; animation: none; }
+  .dt-reveal { opacity: 1; transform: none; transition: none; }
+  .dt-card:hover,
+  .dt-step:hover,
+  .dt-btn-primary:hover { transform: none; }
+  .dt-btn:hover svg { transform: none; }
+  .dt-nav-links a::after { transition: none; }
+}

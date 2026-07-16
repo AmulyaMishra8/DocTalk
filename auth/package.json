@@ -1,0 +1,18 @@
+{
+  "name": "auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable in-house authentication service (Express + React)",
+  "workspaces": [
+    "packages/shared",
+    "packages/api",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @auth/api",
+    "dev:web": "npm run dev --workspace @auth/web",
+    "build": "npm run build --workspace @auth/shared && npm run build --workspace @auth/api && npm run build --workspace @auth/web",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  }
+}

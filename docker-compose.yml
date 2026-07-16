@@ -1,0 +1,58 @@
+# One-command full stack: `docker compose up --build`
+#
+# Services: Redis (queue) + MarkItDown (PDF→MD) + API + worker + frontend.
+# The database stays on Neon (cloud) — DATABASE_URL/GEMINI_API_KEY/GROQ_API_KEY
+# come from backend/.env. Inside the compose network, services reach each other
+# by name (redis, markitdown, api), which is why REDIS_URL / MARKITDOWN_URL /
+# BACKEND_URL are overridden below.
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  markitdown:
+    build: ./markitdown-service
+    ports:
+      - "8000:8000"
+
+  api:
+    build: ./backend
+    image: neuralhire-backend
+    command: npm start
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      MARKITDOWN_URL: http://markitdown:8000
+      PORT: "3000"
+      # Containers have no IPv6 route; force IPv4 so Node's "Happy Eyeballs"
+      # autoselect doesn't stall connecting to Neon/Postgres (ETIMEDOUT).
+      NODE_OPTIONS: "--dns-result-order=ipv4first --no-network-family-autoselection"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+      - markitdown
+
+  worker:
+    build: ./backend
+    image: neuralhire-backend
+    command: npm run worker
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      MARKITDOWN_URL: http://markitdown:8000
+      NODE_OPTIONS: "--dns-result-order=ipv4first --no-network-family-autoselection"
+    depends_on:
+      - redis
+      - markitdown
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://api:3000
+    ports:
+      # Host 5174 → container 5173 (5173 is often taken by another local dev app).
+      - "5174:5173"
+    depends_on:
+      - api

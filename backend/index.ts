@@ -1,0 +1,24 @@
+import 'dotenv/config';
+import app from './app';
+import { pool } from './db/pool';
+import { logger } from './lib/logger';
+
+const port = process.env.PORT || 3000;
+
+const server = app.listen(port, () => {
+  logger.info({ port }, 'server started');
+});
+
+async function shutdown(signal: string) {
+  logger.info({ signal }, 'shutting down gracefully');
+  server.close(async () => {
+    await pool.end();
+    logger.info('server closed');
+    process.exit(0);
+  });
+  // Force exit if drain takes too long
+  setTimeout(() => process.exit(1), 10_000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));

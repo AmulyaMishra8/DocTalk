@@ -1,0 +1,46 @@
+# ── Secrets ───────────────────────────────────────────────────────────────
+# Never commit these: backend/.env holds the Neon DATABASE_URL and GROQ_API_KEY;
+# auth/packages/api/.env holds the database URL, ENCRYPTION_KEY, Google/GitHub
+# OAuth secrets and SMTP credentials. .env.example files are tracked instead.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keys/
+auth-keys/
+
+# ── Dependencies ──────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ── Build output ──────────────────────────────────────────────────────────
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# ── Runtime ───────────────────────────────────────────────────────────────
+# Uploaded PDFs are transient: the worker deletes each file after ingesting it.
+backend/uploads/
+*.log
+npm-debug.log*
+
+# ── Third party ───────────────────────────────────────────────────────────
+# A full copy of Microsoft's MarkItDown repo. Nothing references it —
+# markitdown-service installs `markitdown[pdf]` from pip (see its
+# requirements.txt) — so it stays out of this history.
+markitdown-main/
+
+# ── Editor / OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.swp

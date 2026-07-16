@@ -1,0 +1,23 @@
+# Auth web (React/Vite) image. Built from the workspace root so @auth/shared
+# resolves. VITE_API_URL is baked at build time (the browser reaches the API on
+# the host), so it's passed as a build arg from compose.
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/api/package.json packages/api/package.json
+COPY packages/web/package.json packages/web/package.json
+RUN npm install
+
+COPY packages/shared packages/shared
+RUN npm run build --workspace @auth/shared
+COPY packages/web packages/web
+
+ARG VITE_API_URL=http://localhost:4000
+ENV VITE_API_URL=$VITE_API_URL
+RUN npm run build --workspace @auth/web
+
+EXPOSE 5173
+CMD ["npm", "run", "preview", "--workspace", "@auth/web", "--", "--host", "0.0.0.0", "--port", "5173"]

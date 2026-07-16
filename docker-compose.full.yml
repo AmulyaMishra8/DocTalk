@@ -1,0 +1,123 @@
+# Single-command full stack: NeuralHire + the Auth microservice.
+# Run from this folder:  docker compose -f docker-compose.full.yml up --build
+#
+# Databases stay in the cloud (NeuralHire -> Neon, Auth -> Supabase/Redis Cloud),
+# read from each app's own .env. Only NeuralHire's queue Redis runs locally.
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  markitdown:
+    build: ./markitdown-service
+    ports:
+      - "8000:8000"
+
+  # Local Postgres for the Auth service. We do NOT use Auth's cloud (Supabase)
+  # DB here because its *direct* endpoint is IPv6-only and these containers have
+  # no IPv6 route. A local DB keeps the whole stack self-contained; migrations
+  # are applied automatically on auth-api startup.
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth
+      POSTGRES_DB: auth
+    volumes:
+      - auth-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---- Auth microservice (vendored local copy at ./auth) ----
+  # This is a self-contained copy of the Auth service so its code/UI can be
+  # changed here without affecting the original at C:\Users\amuly\Desktop\Auth.
+  auth-api:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile.api
+    env_file: ./auth/packages/api/.env
+    environment:
+      PORT: "4000"
+      # NeuralHire IS the web app now: verification / password-reset email links
+      # and OAuth redirects all point back here (not the old standalone portal).
+      WEB_ORIGIN: http://localhost:5174
+      APP_URL: http://localhost:4000
+      # Override the .env cloud connections with in-network services so nothing
+      # depends on the host's IPv6 stack. Auth uses Redis only for refresh tokens,
+      # so it safely shares NeuralHire's Redis (different key namespaces).
+      DATABASE_URL: postgresql://auth:auth@auth-db:5432/auth?schema=public
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "4000:4000"
+    volumes:
+      - auth-keys:/app/packages/api/keys
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # NOTE: the standalone Auth web app (auth-web on :5173) was removed — all of
+  # its screens (login, register, verify, reset, MFA, account) now live INSIDE
+  # NeuralHire. Re-add it only if you want the separate portal back.
+
+  # ---- NeuralHire ----
+  api:
+    build: ./backend
+    image: neuralhire-backend
+    command: npm start
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      MARKITDOWN_URL: http://markitdown:8000
+      PORT: "3000"
+      # Verify access tokens against the auth container's JWKS over the compose network.
+      AUTH_JWKS_URL: http://auth-api:4000/.well-known/jwks.json
+      AUTH_ISSUER: auth-service
+      AUTH_AUDIENCE: auth-clients
+      NODE_OPTIONS: "--dns-result-order=ipv4first --no-network-family-autoselection"
+    ports:
+      - "3000:3000"
+    volumes:
+      - neuralhire-uploads:/app/uploads
+    depends_on:
+      - redis
+      - markitdown
+      - auth-api
+
+  worker:
+    build: ./backend
+    image: neuralhire-backend
+    command: npm run worker
+    env_file: ./backend/.env
+    environment:
+      REDIS_URL: redis://redis:6379
+      MARKITDOWN_URL: http://markitdown:8000
+      NODE_OPTIONS: "--dns-result-order=ipv4first --no-network-family-autoselection"
+    volumes:
+      - neuralhire-uploads:/app/uploads
+    depends_on:
+      - redis
+      - markitdown
+
+  frontend:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://api:3000
+      # The frontend's Vite proxy forwards /auth + /mfa to the auth container.
+      AUTH_URL: http://auth-api:4000
+    ports:
+      # Host 5174 -> container 5173 (5173 is often taken by another local app).
+      - "5174:5173"
+    depends_on:
+      - api
+      - auth-api
+
+volumes:
+  auth-keys:
+  auth-pgdata:
+  neuralhire-uploads:

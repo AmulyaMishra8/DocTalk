@@ -1,0 +1,45 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "concurrently -n api,worker -c blue,magenta \"tsx watch index.ts\" \"tsx watch workers/markdownWorker.ts\"",
+    "dev:api": "tsx watch index.ts",
+    "dev:worker": "tsx watch workers/markdownWorker.ts",
+    "worker": "tsx workers/markdownWorker.ts",
+    "migrate": "tsx db/migrate.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.18.0",
+    "bullmq": "^5.79.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "form-data": "^4.0.6",
+    "ioredis": "^5.11.1",
+    "jose": "^5.10.0",
+    "multer": "^2.2.0",
+    "pg": "^8.22.0",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^26.0.0",
+    "@types/pg": "^8.20.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
