@@ -22,7 +22,8 @@
 # DATABASE
 #   Points at your existing Neon project rather than a Render database, because
 #   Render's free Postgres is deleted 30 days after creation. Both schemas live
-#   in that one database: DocTalk in `public`, auth in `auth`.
+#   in that one database: DocTalk in `public`, auth in a schema of its own.
+#   On Supabase that schema must NOT be called `auth` — see AUTH_DATABASE_URL.
 
 services:
   - name: doctalk
@@ -42,9 +43,18 @@ services:
       - key: DATABASE_URL
         sync: false
 
-      # Same Neon database, separate schema for the auth service's tables.
-      # Take DATABASE_URL and append &schema=auth (or ?schema=auth if it has no
-      # query string yet).
+      # Same database, separate schema for the auth service's tables. Take
+      # DATABASE_URL and append &schema=auth (or ?schema=auth if it has no query
+      # string yet). start.sh passes this to the auth service AS DATABASE_URL —
+      # both services want that name, and one container has one env namespace.
+      #
+      # SUPABASE: do NOT use schema=auth — that name is reserved for Supabase's
+      # own GoTrue tables and is already populated, so migrate deploy aborts with
+      # P3005. Use e.g. schema=doctalk_auth, created up front with
+      # `CREATE SCHEMA IF NOT EXISTS doctalk_auth;`. Also point both URLs at the
+      # Supavisor SESSION pooler (…pooler.supabase.com:5432) — the direct host is
+      # IPv6-only and unreachable from here, and transaction mode (:6543) breaks
+      # Prisma migrations. See README → Deploying for free.
       - key: AUTH_DATABASE_URL
         sync: false
 

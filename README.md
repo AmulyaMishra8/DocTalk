@@ -158,11 +158,35 @@ Two hosts are supported. **Hugging Face Spaces is the one to use.**
 Both need a Postgres with pgvector (a free [Neon](https://neon.tech) project —
 Render's own free database is deleted after 30 days) and a `GROQ_API_KEY`.
 Point both database URLs at the same database; DocTalk uses `public` and the
-auth service gets its own schema:
+auth service gets its own schema. Only Prisma reads `?schema=`, so the suffix
+lands the auth tables where they belong while DocTalk's `pg` pool ignores it and
+stays on `public`:
 
 ```
 DATABASE_URL       postgresql://…/neondb?sslmode=require
 AUTH_DATABASE_URL  postgresql://…/neondb?sslmode=require&schema=auth
+```
+
+**On Supabase, two things differ.** Both are silent traps:
+
+1. **Don't use `schema=auth`** — Supabase reserves `auth` for its own GoTrue
+   tables (`auth.users` et al). It already exists and is already populated, so
+   `prisma migrate deploy` aborts with `P3005: schema is not empty`, and every
+   auth table stays missing (`P2021`) until you rename. Migrating *into* it would
+   be worse than the error: that schema is Supabase Auth's. Pick an unclaimed
+   name and create it first — `CREATE SCHEMA IF NOT EXISTS doctalk_auth;` — and
+   avoid `auth`, `storage`, `realtime`, `graphql`, `vault`, `extensions`,
+   `pgbouncer`, `cron` and `supabase_*`.
+2. **Use the Supavisor session pooler, not the direct host.**
+   `db.<ref>.supabase.co` resolves to IPv6 only unless you pay for the IPv4
+   add-on, and neither host here has an IPv6 route — it fails with `P1001`. The
+   pooler is IPv4 on every tier. Session mode (`:5432`), *not* transaction mode
+   (`:6543`), which breaks the `prisma migrate deploy` that `start.sh` runs on
+   each boot.
+
+```
+DATABASE_URL       postgresql://…pooler.supabase.com:5432/postgres?sslmode=require
+AUTH_DATABASE_URL  postgresql://…pooler.supabase.com:5432/postgres?sslmode=require&schema=doctalk_auth
 ```
 
 ### Hugging Face Spaces
@@ -233,5 +257,12 @@ auth/                 Auth microservice (API + web)
 
 - Free-tier LLM providers may train on input. Use documents you're comfortable
   sending, and treat generated answers as a starting point, not a verdict.
-- Containers here have no IPv6 route, so the API and worker set
-  `--dns-result-order=ipv4first` to reach a cloud Postgres.
+- The local Docker Compose stack sets `--dns-result-order=ipv4first` on the API
+  and worker: those containers have no IPv6 route to a cloud Postgres. The
+  deploy images don't set it, and it wouldn't help there anyway — the flag only
+  reorders DNS results, so it can't reach a host that has no IPv4 record at all.
+  Supabase is the case that bites: `db.<ref>.supabase.co` resolves to IPv6 only
+  unless you buy the IPv4 add-on, so use the Supavisor **session pooler** string
+  (`…pooler.supabase.com:5432`) for both database URLs. Session mode, not
+  transaction mode (`:6543`) — Prisma migrations fail through the latter, and
+  `start.sh` runs `prisma migrate deploy` on every boot.
