@@ -1,10 +1,11 @@
 #!/bin/bash
 # Boot every runtime in one container. Shared by both deploy images:
 #
-#   Dockerfile         Hugging Face Spaces (2 vCPU / 16 GB) — the recommended
-#                      free host. Local embeddings, Redis in-container.
-#   Dockerfile.render  Render free (0.1 CPU / 512 MB). No room for PyTorch, so
-#                      it needs EMBED_PROVIDER=gemini + an external Key Value.
+#   Dockerfile.render  Render free (0.1 CPU / 512 MB) — the free path. No room
+#                      for PyTorch, so it needs EMBED_PROVIDER=gemini + an
+#                      external Key Value.
+#   Dockerfile         Hugging Face Spaces (2 vCPU / 16 GB). Local embeddings,
+#                      Redis in-container. Needs a paid HF plan since July 2026.
 #
 # bash, not sh: `wait -n` (exit as soon as ANY child dies) is a bash builtin.
 # Under Debian's /bin/sh (dash) it fails with "Illegal option -n", which killed

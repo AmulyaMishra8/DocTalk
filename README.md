@@ -137,23 +137,30 @@ docker compose -f docker-compose.full.yml up --build
 | `GEMINI_API_KEY` | | Only when `LLM_PROVIDER=gemini` |
 | `CHAT_MODEL`, `UTIL_MODEL`, `LLM_MIN_GAP_MS` | | Model and pacing overrides |
 
-## Deploying for free
+## Deploying
 
 The whole stack runs as **one container**: the API (worker in-process) serving
 the built frontend, MarkItDown, and the auth service. Only the public port is
 exposed — the API proxies `/auth`, `/mfa` and `/oauth` to the auth service over
 loopback, so the browser sees one origin and its cookies stay first-party.
 
-Two hosts are supported. **Hugging Face Spaces is the one to use.**
+Two hosts are supported. **Render is the only free one; Spaces is the better one
+if you'll pay for it.**
 
-| | HF Spaces (free) | Render (free) |
+| | Render (free) | HF Spaces (needs Pro) |
 |---|---|---|
-| RAM / CPU | **16 GB · 2 vCPU** | 512 MB · 0.1 CPU |
-| Sleeps after | **48 hours** | 15 minutes |
-| Embeddings | **local model, no key** | needs an API key |
-| Re-ingest needed | **no** | yes — different vector space |
-| Redis | in-container | free Key Value |
-| Image | [`Dockerfile`](Dockerfile) | [`Dockerfile.render`](Dockerfile.render) |
+| RAM / CPU | 512 MB · 0.1 CPU | **16 GB · 2 vCPU** |
+| Sleeps after | 15 minutes | **48 hours** |
+| Embeddings | needs an API key | **local model, no key** |
+| Re-ingest needed | yes — different vector space | **no** |
+| Redis | free Key Value | in-container |
+| Image | [`Dockerfile.render`](Dockerfile.render) | [`Dockerfile`](Dockerfile) |
+
+Spaces used to be the free recommendation and the images were built for it. As
+of **July 2026** Hugging Face removed the free CPU Basic tier and restricted the
+Docker SDK to paid accounts — a free account gets ZeroGPU only, which won't run
+this. The Spaces path below is unchanged and still correct; it just costs money
+now. A Static Space is not a fallback: it serves files, and this needs a server.
 
 Both need a Postgres with pgvector (a free [Neon](https://neon.tech) project —
 Render's own free database is deleted after 30 days) and a `GROQ_API_KEY`.
@@ -189,23 +196,12 @@ DATABASE_URL       postgresql://…pooler.supabase.com:5432/postgres?sslmode=req
 AUTH_DATABASE_URL  postgresql://…pooler.supabase.com:5432/postgres?sslmode=require&schema=doctalk_auth
 ```
 
-### Hugging Face Spaces
-
-Create a Space with **Docker** as the SDK and push this repo to it. The YAML
-header at the top of this README configures it (`sdk: docker`, `app_port: 7860`).
-Add four Space secrets: `DATABASE_URL`, `AUTH_DATABASE_URL`, `GROQ_API_KEY` and
-`ENCRYPTION_KEY` (`openssl rand -hex 32`). That's all — embeddings run locally
-in the container, so there's no embedding key and vectors stay identical to a
-local run.
-
-Use the direct `https://<user>-<space>.hf.space` URL. The huggingface.co page
-frames the Space in an iframe, which makes the auth cookies third-party and
-blocks sign-in.
-
-### Render
+### Render — the free path
 
 `render.yaml` is a Blueprint: Dashboard → New → Blueprint → pick this repo, then
 fill in the five secrets it prompts for — the four above plus `GEMINI_API_KEY`.
+None are optional: `ENCRYPTION_KEY` left blank falls back to a dev default that
+the auth service refuses to boot with in production, by design.
 
 The extra key is the price of 512 MB: PyTorch and the all-mpnet-base-v2 weights
 need roughly a gigabyte, so `EMBED_PROVIDER=gemini` is forced and
@@ -214,6 +210,23 @@ different space from the local model's**, so pointing Render at a database
 ingested locally means retrieval quietly returns nonsense until you re-ingest.
 Measured under `docker run --memory=512m`: ~200 MB idle, ~188 MB after a real
 signup, login and API queries — it fits, and 0.1 CPU is the real bottleneck.
+
+### Hugging Face Spaces — needs a paid plan
+
+Create a Space with **Docker** as the SDK and push this repo to it. The YAML
+header at the top of this README configures it (`sdk: docker`, `app_port: 7860`).
+Add four Space secrets: `DATABASE_URL`, `AUTH_DATABASE_URL`, `GROQ_API_KEY` and
+`ENCRYPTION_KEY` (`openssl rand -hex 32`). That's all — embeddings run locally
+in the container, so there's no embedding key and vectors stay identical to a
+local run.
+
+The Docker SDK and CPU Basic hardware both require Pro as of July 2026; on a free
+account the SDK is marked paid at creation time and you can't select the
+hardware.
+
+Use the direct `https://<user>-<space>.hf.space` URL. The huggingface.co page
+frames the Space in an iframe, which makes the auth cookies third-party and
+blocks sign-in.
 
 ### True of both
 

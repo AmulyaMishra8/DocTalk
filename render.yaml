@@ -54,7 +54,7 @@ services:
       # `CREATE SCHEMA IF NOT EXISTS doctalk_auth;`. Also point both URLs at the
       # Supavisor SESSION pooler (…pooler.supabase.com:5432) — the direct host is
       # IPv6-only and unreachable from here, and transaction mode (:6543) breaks
-      # Prisma migrations. See README → Deploying for free.
+      # Prisma migrations. See README → Deploying.
       - key: AUTH_DATABASE_URL
         sync: false
 

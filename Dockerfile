@@ -1,7 +1,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# DocTalk — Hugging Face Spaces image (the recommended free host).
+# DocTalk — Hugging Face Spaces image.
 #
-# Spaces free hardware is 2 vCPU / 16 GB / 50 GB disk, so unlike the 512 MB
+# Needs a paid HF plan: as of July 2026 the Docker SDK and CPU Basic hardware
+# are Pro-only. Dockerfile.render is the free path. This image is still the
+# better one — it just isn't free any more.
+#
+# Spaces CPU Basic is 2 vCPU / 16 GB / 50 GB disk, so unlike the 512 MB
 # Render free instance (see Dockerfile.render) everything fits as designed:
 #
 #   :7860           Node    API + BullMQ worker (in-process) + built frontend
